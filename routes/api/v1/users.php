@@ -12,4 +12,6 @@ use App\Http\Controllers\API\V1\UserController;
 
 // This is apiResource route for the UserController.
 // It will automatically create routes for index, show, store, update, and destroy methods.
-Route::apiResource('users', UserController::class);
+Route::middleware(['throttle:users'])->group(function () {
+    Route::apiResource('users', UserController::class);
+});

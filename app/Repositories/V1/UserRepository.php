@@ -10,22 +10,40 @@
 namespace App\Repositories\V1;
 
 use App\Models\V1\User;
+use Illuminate\Support\Facades\Cache;
 
 class UserRepository
 {
+    protected $cacheTTL = 60 * 5; // Cache time (5 minutes)
+
     public function all()
     {
-        return User::all();
+        return Cache::remember('users:all', $this->cacheTTL, function () {
+            $users = User::all();
+            if ($users->isEmpty()) {
+                return null;
+            }
+            return $users;
+        }) ?? collect();
     }
 
     public function find($id): ?User
     {
-        return User::find($id);
+        return Cache::remember("users:{$id}", $this->cacheTTL, function () use ($id) {
+            $user = User::find($id);
+            if (is_null($user)) {
+                return null;
+            }
+            return $user;
+        });
     }
 
     public function create(array $data): User
     {
-        return User::create($data);
+        $user = User::create($data);
+        Cache::forget('users:all');
+        Cache::put("users:{$user->id}", $user, $this->cacheTTL);
+        return $user;
     }
 
     public function update($id, array $data): ?User
@@ -35,6 +53,8 @@ class UserRepository
             return null;
         }
         $user->update($data);
+        Cache::put("users:{$id}", $user, $this->cacheTTL);
+        Cache::forget('users:all');
         return $user;
     }
 
@@ -44,6 +64,11 @@ class UserRepository
         if (!$user) {
             return false;
         }
-        return (bool) $user->delete();
+        $deleted = (bool) $user->delete();
+        if ($deleted) {
+            Cache::forget("users:{$id}");
+            Cache::forget('users:all');
+        }
+        return $deleted;
     }
 }
